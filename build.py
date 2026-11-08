@@ -10,6 +10,9 @@ listings are left off the public page.
 import html, json, re, sys
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
+
+REPO = "https://github.com/SteveSnow/house-watch"
 
 PRIVATE = [  # never published
     (re.compile(r"Merck(?: West Point)?(?: site)?", re.I), "the work site"),
@@ -69,7 +72,26 @@ def sources_table(r):
 def card(r):
     match = r.get("verdict") == "match"
     pill = '<span class="pill match">Meets all criteria</span>' if match else '<span class="pill check">Needs a check</span>'
-    saved = '<span class="pill saved">Shortlisted</span>' if r.get("userStatus") == "saved" else ""
+    saved = '<span class="pill saved">✓ Want to see</span>' if r.get("userStatus") == "saved" else ""
+    links = []
+    if isinstance(r.get("lat"), (int, float)) and isinstance(r.get("lng"), (int, float)):
+        links.append(("Street View", f'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={r["lat"]},{r["lng"]}'))
+    elif r.get("address"):
+        links.append(("Map", "https://www.google.com/maps/search/?api=1&query=" + quote(f'{r["address"]}, {r.get("town","")}')))
+    if r.get("redfinUrl"):
+        links.append(("Redfin", r["redfinUrl"]))
+    link_html = "".join(f'<a href="{e(u)}" target="_blank" rel="noopener">{t}</a>' for t, u in links)
+    slug = r.get("id", "")
+    def issue(kind):
+        title = f'{kind}: {scrub(r.get("address",""))} [{slug}]'
+        body = ("Click \"Submit new issue\" to record this. The daily search applies it the next morning "
+                "and closes this issue.")
+        return f"{REPO}/issues/new?title={quote(title)}&body={quote(body)}"
+    see_on = r.get("userStatus") == "saved"
+    actions = (f'<div class="actions"><a class="btn{" on" if see_on else ""}" href="{e(issue("UNSEE" if see_on else "SEE"))}" target="_blank" rel="noopener">'
+               f'{"✓ Want to see (undo)" if see_on else "Want to see"}</a>'
+               f'<a class="btn dismiss" href="{e(issue("DISMISS"))}" target="_blank" rel="noopener">Dismiss</a>'
+               f'<span class="hint">Opens a GitHub form; applied by the next morning&rsquo;s update.</span></div>')
     addr = e(r.get("address"))
     if r.get("url"):
         addr = f'<a href="{e(r["url"])}" target="_blank" rel="noopener">{addr}</a>'
@@ -81,18 +103,21 @@ def card(r):
         ("Drive to work site", "merck")])
     return f"""<article class="card">
   <div class="top"><h2 class="addr">{addr}</h2><span class="price">{money(r.get("price"))}</span></div>
-  <div class="meta">{pill}{saved}<span>{e(r.get("town"))}</span><span>{e(r.get("bedsBaths"))}</span><span>found {e(str(r.get("firstSeen",""))[:10])}</span></div>
+  <div class="meta">{pill}{saved}<span>{e(r.get("town"))}</span><span>{e(r.get("bedsBaths"))}</span><span>found {e(str(r.get("firstSeen",""))[:10])}</span>{link_html}</div>
   <dl>{dl}</dl>
   {flags}
   {sources_table(r)}
   {notes}
+  {actions}
 </article>"""
 
 def build(rows, meta):
     rows = [r for r in rows if visible(r)]
     rows.sort(key=lambda r: (r.get("verdict") != "match", str(r.get("firstSeen", ""))), reverse=False)
-    matches = [r for r in rows if r.get("verdict") == "match"]
-    checks = [r for r in rows if r.get("verdict") != "match"]
+    want = [r for r in rows if r.get("userStatus") == "saved"]
+    rest = [r for r in rows if r.get("userStatus") != "saved"]
+    matches = [r for r in rest if r.get("verdict") == "match"]
+    checks = [r for r in rest if r.get("verdict") != "match"]
     def section(title, items, empty):
         body = "".join(card(r) for r in items) or f'<div class="empty">{empty}</div>'
         return f'<section><h2 class="sec">{title} <span class="count">{len(items)}</span></h2><div class="list">{body}</div></section>'
@@ -101,6 +126,7 @@ def build(rows, meta):
     built = datetime.now().strftime("%Y-%m-%d %H:%M")
     return TEMPLATE.format(
         run=html.escape(f"Last search {last} · {run}" if last else f"Updated {built}"),
+        want=section("Want to see", want, "Nothing marked yet. Use “Want to see” on any house below."),
         matches=section("Meets all criteria", matches, "No full matches right now."),
         checks=section("Needs a check", checks, "Nothing waiting on a check."),
         built=html.escape(built))
@@ -127,15 +153,21 @@ h1{{font-family:var(--display);font-size:clamp(28px,5vw,40px);margin:0;line-heig
 .pill{{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px}}.pill.match{{background:var(--accent-soft);color:var(--accent)}}.pill.check{{background:var(--warn-soft);color:var(--warn)}}.pill.saved{{border:1px solid var(--accent);color:var(--accent)}}
 dl{{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px 18px;margin:0}}dt{{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}}dd{{margin:0;font-family:var(--mono);font-size:13px;overflow-wrap:anywhere}}
 .flags{{margin:0;font-size:13.5px;color:var(--warn);background:var(--warn-soft);border-radius:8px;padding:8px 10px}}
-.src{{overflow-x:auto;border:1px solid var(--line);border-radius:8px}}.src table{{border-collapse:collapse;width:100%;font-size:13px;min-width:520px}}
+.src{{overflow-x:auto;border:1px solid var(--line);border-radius:8px}}.src table{{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}}
 .src th{{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}}
 .src td{{padding:6px 10px;border-bottom:1px solid var(--line);font-family:var(--mono);vertical-align:top}}.src tr:last-child td{{border-bottom:0}}
 .src td.site{{font-family:var(--body);font-weight:600}}.src td.site a{{color:var(--accent)}}.src td.off{{background:var(--warn-soft);color:var(--warn);font-weight:600}}.src td.off::before{{content:"≠ "}}
-.src td.note{{font-family:var(--body);color:var(--muted);font-size:12.5px}}.notes{{margin:0;font-size:14px;border-top:1px dashed var(--line);padding-top:10px}}
+.src td.note{{min-width:220px;font-family:var(--body);color:var(--muted);font-size:12.5px}}.notes{{margin:0;font-size:14px;border-top:1px dashed var(--line);padding-top:10px}}
+.meta a{{color:var(--accent);font-weight:600}}
+.actions{{display:flex;flex-wrap:wrap;gap:8px;align-items:center}}
+.btn{{font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:5px 12px;text-decoration:none}}
+.btn.on{{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}}.btn.dismiss{{color:var(--muted)}}
+.hint{{font-size:12px;color:var(--muted)}}
 .empty{{color:var(--muted);border:1px dashed var(--line);border-radius:12px;padding:20px;text-align:center}}footer{{font-size:12.5px;color:var(--muted)}}
 </style></head><body><div class="wrap">
 <header><h1>House Watch</h1><p class="sub">4-bedroom homes in the Philadelphia suburbs, checked every morning against our criteria.</p><div class="run">{run}</div></header>
 <div class="criteria"><span class="chip">4+ bd</span><span class="chip">$750K–$1.25M</span><span class="chip">schools &gt;6 (E/M/H)</span><span class="chip">sidewalk</span><span class="chip">≥1,000 ft from highway</span><span class="chip">≥1 mi from golf</span><span class="chip">taxes &lt;$15K</span><span class="chip">commute limits</span></div>
+{want}
 {matches}
 {checks}
 <footer>In each “Listed on” table, a highlighted ≠ cell differs from the best current price, bedroom count or MLS number shown at the top of the card, or shows a status other than active. Golf distances are measured to the clubhouse, so a course edge can be up to half a mile closer. Drive times are estimates. Page built {built}.</footer>
