@@ -13,6 +13,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 REPO = "https://github.com/SteveSnow/house-watch"
+# Street View Static API key, restricted to https://stevesnow.github.io/* and the Street View Static API only.
+SV_KEY = "AIzaSyDax9Uio9_visvmdKFMegrracv757NbjlI"
 
 PRIVATE = [  # never published
     (re.compile(r"Merck(?: West Point)?(?: site)?", re.I), "the work site"),
@@ -94,6 +96,14 @@ def card(r):
                f'{"✓ Want to see (undo)" if see_on else "Want to see"}</a>'
                f'<a class="btn dismiss" href="{e(issue("DISMISS"))}" target="_blank" rel="noopener">Dismiss</a>'
                f'<span class="hint">Opens a GitHub form; applied by the next morning&rsquo;s update.</span></div>')
+    photo = ""
+    if isinstance(r.get("lat"), (int, float)) and isinstance(r.get("lng"), (int, float)):
+        src = (f"https://maps.googleapis.com/maps/api/streetview?size=640x300&scale=2&fov=80&source=outdoor"
+               f"&location={r['lat']},{r['lng']}&key={SV_KEY}")
+        sv = f"https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={r['lat']},{r['lng']}"
+        photo = (f'<a class="photo" href="{e(sv)}" target="_blank" rel="noopener">'
+                 f'<img src="{e(src)}" alt="Street View of {e(r.get("address"))}" loading="lazy" '
+                 f'onerror="this.parentNode.remove()"></a>')
     addr = e(r.get("address"))
     if r.get("url"):
         addr = f'<a href="{e(r["url"])}" target="_blank" rel="noopener">{addr}</a>'
@@ -104,6 +114,7 @@ def card(r):
         ("Highway", "highway"), ("Sidewalk", "sidewalk"), ("Drive to Bala Cynwyd", "drive"),
         ("Drive to work site", "merck")])
     return f"""<article class="card">
+  {photo}
   <div class="top"><h2 class="addr">{addr}</h2><span class="price">{money(r.get("price"))}</span></div>
   <div class="meta">{pill}{saved}<span>{e(r.get("town"))}</span><span>{e(r.get("bedsBaths"))}</span><span>found {e(str(r.get("firstSeen",""))[:10])}</span>{link_html}</div>
   <dl>{dl}</dl>
@@ -161,6 +172,8 @@ dl{{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8p
 .src td.site{{font-family:var(--body);font-weight:600}}.src td.site a{{color:var(--accent)}}.src td.off{{background:var(--warn-soft);color:var(--warn);font-weight:600}}.src td.off::before{{content:"≠ "}}
 .src td.note{{min-width:220px;font-family:var(--body);color:var(--muted);font-size:12.5px}}.notes{{margin:0;font-size:14px;border-top:1px dashed var(--line);padding-top:10px}}
 .meta a{{color:var(--accent);font-weight:600}}
+.photo{{display:block;margin:-16px -18px 0;border-radius:12px 12px 0 0;overflow:hidden;background:var(--line);aspect-ratio:640/300}}
+.photo img{{display:block;width:100%;height:100%;object-fit:cover}}
 .actions{{display:flex;flex-wrap:wrap;gap:8px;align-items:center}}
 .btn{{font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:5px 12px;text-decoration:none}}
 .btn.on{{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}}.btn.dismiss{{color:var(--muted)}}
