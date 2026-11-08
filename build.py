@@ -74,6 +74,8 @@ def card(r):
     pill = '<span class="pill match">Meets all criteria</span>' if match else '<span class="pill check">Needs a check</span>'
     saved = '<span class="pill saved">✓ Want to see</span>' if r.get("userStatus") == "saved" else ""
     links = []
+    if r.get("url") or r.get("redfinUrl"):
+        links.append(("Photos", r.get("url") or r.get("redfinUrl")))
     if isinstance(r.get("lat"), (int, float)) and isinstance(r.get("lng"), (int, float)):
         links.append(("Street View", f'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={r["lat"]},{r["lng"]}'))
     elif r.get("address"):
