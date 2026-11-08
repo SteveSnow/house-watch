@@ -71,6 +71,18 @@ def sources_table(r):
     return ('<div class="src"><table><thead><tr><th>Listed on</th><th>Price</th><th>Status</th>'
             '<th>Beds</th><th>MLS #</th><th>Note</th></tr></thead><tbody>' + "".join(out) + "</tbody></table></div>")
 
+FEAT_K = {"yes": ("good", "Open kitchen: yes"), "likely": ("good", "Open kitchen: likely"), "maybe": ("mid", "Open kitchen: maybe"),
+          "no": ("", "Open kitchen: no"), "unknown": ("", "Open kitchen: not described")}
+FEAT_P = {"walk-in": ("good", "Walk-in pantry: yes"), "likely": ("good", "Walk-in pantry: likely"), "pantry": ("mid", "Pantry, walk-in not stated"),
+          "no": ("", "No pantry mentioned"), "unknown": ("", "Pantry: not described")}
+
+def features(r):
+    if not r.get("kitchenOpen") and not r.get("pantry"):
+        return ""
+    k = FEAT_K.get(r.get("kitchenOpen"), FEAT_K["unknown"]); p = FEAT_P.get(r.get("pantry"), FEAT_P["unknown"])
+    return (f'<div class="feat"><div class="ft {k[0]}"><b>{k[1]}</b><span>{e(r.get("kitchenNote"))}</span></div>'
+            f'<div class="ft {p[0]}"><b>{p[1]}</b><span>{e(r.get("pantryNote"))}</span></div></div>')
+
 def card(r):
     match = r.get("verdict") == "match"
     pill = '<span class="pill match">Meets all criteria</span>' if match else '<span class="pill check">Needs a check</span>'
@@ -118,6 +130,7 @@ def card(r):
   <div class="top"><h2 class="addr">{addr}</h2><span class="price">{money(r.get("price"))}</span></div>
   <div class="meta">{pill}{saved}<span>{e(r.get("town"))}</span><span>{e(r.get("bedsBaths"))}</span><span>found {e(str(r.get("firstSeen",""))[:10])}</span>{link_html}</div>
   <dl>{dl}</dl>
+  {features(r)}
   {flags}
   {sources_table(r)}
   {notes}
@@ -172,6 +185,8 @@ dl{{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8p
 .src td.site{{font-family:var(--body);font-weight:600}}.src td.site a{{color:var(--accent)}}.src td.off{{background:var(--warn-soft);color:var(--warn);font-weight:600}}.src td.off::before{{content:"≠ "}}
 .src td.note{{min-width:220px;font-family:var(--body);color:var(--muted);font-size:12.5px}}.notes{{margin:0;font-size:14px;border-top:1px dashed var(--line);padding-top:10px}}
 .meta a{{color:var(--accent);font-weight:600}}
+.feat{{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}}.ft{{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13.5px;min-width:0}}
+.ft b{{display:block;font-size:13px}}.ft span{{color:var(--muted);font-size:12.5px}}.ft.good{{border-color:var(--accent);background:var(--accent-soft)}}.ft.good b{{color:var(--accent)}}.ft.mid b{{color:var(--warn)}}
 .photo{{display:block;margin:-16px -18px 0;border-radius:12px 12px 0 0;overflow:hidden;background:var(--line);aspect-ratio:640/300}}
 .photo img{{display:block;width:100%;height:100%;object-fit:cover}}
 .actions{{display:flex;flex-wrap:wrap;gap:8px;align-items:center}}
